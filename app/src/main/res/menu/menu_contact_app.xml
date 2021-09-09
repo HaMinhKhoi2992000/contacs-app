@@ -3,5 +3,9 @@
     <item android:id="@+id/merge"
         android:title= "Merge duplicate"/>
     <item android:id="@+id/ReadContacts"
-        android:title= "Read contacts" />
+        android:title= "Read contacts and Sync to app" />
+    <item android:id="@+id/ExportCSV"
+        android:title= "Export CSV File" />
+    <item android:id="@+id/ImportCSV"
+        android:title= "Import CSV File" />
 </menu>

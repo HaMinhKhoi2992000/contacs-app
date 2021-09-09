@@ -1,6 +1,7 @@
 package com.example.contactlist;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -10,19 +11,29 @@ import androidx.recyclerview.widget.RecyclerView;
 import android.Manifest;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.ContactsContract;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.Toast;
 
+import com.opencsv.CSVReader;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -35,7 +46,6 @@ public class MainActivity extends AppCompatActivity {
     HashSet<ContactModel> contactsSet;
     MainAdapter adapter;
     Database database;
-    String lastnumber = "0";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -61,11 +71,28 @@ public class MainActivity extends AppCompatActivity {
         switch (item.getItemId()) {
             case R.id.merge:
                 this.arrayList = merge();
-                adapter = new MainAdapter(this, arrayList);
+                adapter = new MainAdapter(MainActivity.this,this, arrayList);
                 recyclerView.setAdapter(adapter);
+                Toast.makeText(MainActivity.this, "Merged", Toast.LENGTH_SHORT).show();
                 return true;
             case R.id.ReadContacts:
-                readContacts();
+                readContactsAndSync();
+                Toast.makeText(MainActivity.this, "Read contacts from phone successfully!", Toast.LENGTH_SHORT).show();
+                return true;
+            case R.id.ExportCSV:
+                if (Build.VERSION.SDK_INT >= 30){
+                    if (!Environment.isExternalStorageManager()){
+                        Intent getpermission = new Intent();
+                        getpermission.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                        startActivity(getpermission);
+                    }
+                }
+                exportCSV();
+                Toast.makeText(MainActivity.this, "Exported", Toast.LENGTH_SHORT).show();
+                return true;
+            case R.id.ImportCSV:
+                importCSV();
+                Toast.makeText(MainActivity.this, "Imported", Toast.LENGTH_SHORT).show();
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
@@ -88,11 +115,75 @@ public class MainActivity extends AppCompatActivity {
         return getContactList();
     }
 
-    public void readContacts()
+    public void readContactsAndSync()
     {
         arrayList.clear();
+        readContactListFromPhone();
+        if (!isDatabaseEmpty(database)) {                       // Check db trong k
+                    database.queryData("DELETE FROM Contacts");     // Co du lieu thi xoa het
+        }
+
+        // Nap lai vao db data tu danh ba trong may
+        for (ContactModel contactModel : arrayList) {
+            addContact(contactModel);
+        }
+
         arrayList = getContactList();
-        adapter = new MainAdapter(this, arrayList);
+        adapter = new MainAdapter(MainActivity.this,this, arrayList);
+        recyclerView.setAdapter(adapter);
+    }
+
+    public void exportCSV(){
+
+        File exportDir = new File(Environment.getExternalStorageDirectory(), "");
+        if (!exportDir.exists())
+        {
+            exportDir.mkdirs();
+        }
+
+        File file = new File(exportDir, "contacts.csv");
+        try
+        {
+            file.createNewFile();
+            CSVWriter csvWrite = new CSVWriter(new FileWriter(file));
+
+            ArrayList<ContactModel> contactList =  new ArrayList<>();
+            Cursor cursor = database.getData("SELECT * FROM Contacts");
+            while (cursor.moveToNext()) {
+                String arrStr[] ={cursor.getString(0),cursor.getString(1), cursor.getString(2)};
+                csvWrite.writeNext(arrStr);
+            }
+            csvWrite.close();
+            cursor.close();
+        }
+        catch(Exception sqlEx)
+        {
+            Log.e("MainActivity", sqlEx.getMessage(), sqlEx);
+        }
+    }
+
+    public void importCSV(){
+        try {
+            arrayList.clear();
+            if (!isDatabaseEmpty(database)) {                       // Check db trong k
+                database.queryData("DELETE FROM Contacts");     // Co du lieu thi xoa het
+            }
+
+
+            File csvfile = new File(Environment.getExternalStorageDirectory() + "/contacts.csv");
+            CSVReader reader = new CSVReader(new FileReader(csvfile.getAbsolutePath()));
+            String[] nextLine;
+            while ((nextLine = reader.readNext()) != null) {
+                // nextLine[] is an array of values from the line
+                ContactModel contactModel = new ContactModel(Integer.parseInt(nextLine[0]), nextLine[1], nextLine[2]);
+                addContact(contactModel);
+            }
+        } catch (IOException e) {
+
+        }
+
+        arrayList = getContactList();
+        adapter = new MainAdapter(MainActivity.this,this, arrayList);
         recyclerView.setAdapter(adapter);
     }
 
@@ -112,48 +203,10 @@ public class MainActivity extends AppCompatActivity {
             // Yeu cau quyen truy cap danh ba neu khong co quyen
             ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.READ_CONTACTS}, 100);
             else {
-
-                readContactListFromPhone();   // cho nay la lay data tu danh ba trong may
-                Log.e("get contact from phone", "run");
-                if (!isDatabaseEmpty(database)) {                       // Check db trong k
-                    database.queryData("DELETE FROM Contacts");     // Co du lieu thi xoa het
-                }
-
-                // Nap lai vao db data tu danh ba trong may
-                for (int i = 0; i < arrayList.size(); i++)
-                    database.queryData("INSERT INTO Contacts VALUES(null, '" + arrayList.get(i).getName() + "', '" + arrayList.get(i).getNumber() + "')");
-
-                arrayList.clear();
+                readContactListFromPhone();   // cho nay la lay data tu danh ba trong may phong cho truong hop chay app lan dau
                 arrayList = getContactList();
-
-                adapter = new MainAdapter(this, arrayList);
+                adapter = new MainAdapter(MainActivity.this,this, arrayList);
                 recyclerView.setAdapter(adapter);
-
-                for (int i = 0; i < arrayList.size(); i++)
-                    Log.e("Id= "+arrayList.get(i).getId(), arrayList.get(i).getName() + ": " + arrayList.get(i).getNumber());
-
-
-//                if (isDatabaseEmpty(database)) {
-//                    Log.e("Db empty", "true");
-//                    for (int i = 0; i < arrayList.size(); i++)
-//                        database.queryData("INSERT INTO Contacts VALUES(null, '" + arrayList.get(i).getName() + "', '" + arrayList.get(i).getNumber() + "')");
-//                } else {
-//                    Log.e("Database empty", "false");
-//
-//                    //Xoa het nap lai de update voi contact trong may
-//                    database.queryData("DELETE FROM Contacts");
-//
-//                    for (int i = 0; i < arrayList.size(); i++)
-//                    database.queryData("INSERT INTO Contacts VALUES(null, '" + arrayList.get(i).getName() + "', '" + arrayList.get(i).getNumber() + "')");
-//
-//                    arrayList.clear();
-//                    getContactListFromDb(0);
-//                    adapter = new MainAdapter(this, arrayList);
-//                    recyclerView.setAdapter(adapter);
-//
-//                    for (int i = 0; i < arrayList.size(); i++)
-//                        Log.e("Id= "+arrayList.get(i).getId(), arrayList.get(i).getName() + ": " + arrayList.get(i).getNumber());
-//                }
             }
 
     }
@@ -207,7 +260,7 @@ public class MainActivity extends AppCompatActivity {
         }
         //set data vao list view
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        adapter = new MainAdapter(this, arrayList);
+        adapter = new MainAdapter(MainActivity.this,this, arrayList);
         recyclerView.setAdapter(adapter);
     }
 
@@ -221,13 +274,14 @@ public class MainActivity extends AppCompatActivity {
 
             contactList.add(new ContactModel(id, name, phoneNumber));
         }
+        adapter.notifyDataSetChanged();
 
         return contactList;
     }
 
     private ArrayList<ContactModel> getContactByPhoneNumber(String phoneNumber) {
         ArrayList<ContactModel> contactList = new ArrayList<>();
-        Cursor cursor = database.getData("SELECT * FROM Contacts WHERE Number = " + phoneNumber);
+        Cursor cursor = database.getData("SELECT * FROM Contacts WHERE Number = '" + phoneNumber +"'");
         while (cursor.moveToNext()) {
             int id = cursor.getInt(0);
             String name = cursor.getString(1);
@@ -253,11 +307,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void addContact(ContactModel contactModel) {
-        database.queryData("INSERT INTO Contacts VALUES(null, '" + contactModel.getName() + "', '" + contactModel.getName() + "')");
+        database.queryData("INSERT INTO Contacts VALUES(null, '" + contactModel.getName() + "', '" + contactModel.getNumber() + "')");
     }
 
     private void deleteContact(int id) {
         database.queryData("DELETE FROM Contacts WHERE Id = " + id);
+    }
+
+    public void refresh(){
+        adapter = new MainAdapter(MainActivity.this,this, arrayList);
+        recyclerView.setAdapter(adapter);
+    }
+
+    public void DialogDeleteContact(){
+        AlertDialog.Builder dialogDelete = new AlertDialog.Builder(this);
+        dialogDelete.setMessage("Ban co muon xoa contact khong");
+        dialogDelete.show();
     }
 
     @Override
@@ -272,5 +337,7 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(MainActivity.this, "Permission Dennied.", Toast.LENGTH_SHORT).show();
             checkPermission();
         }
+
+
     }
 }

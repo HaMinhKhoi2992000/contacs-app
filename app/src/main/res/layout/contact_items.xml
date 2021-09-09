@@ -14,6 +14,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         />
     <LinearLayout
+        android:id="@+id/profile_info"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
@@ -22,7 +23,7 @@
         app:layout_constraintStart_toEndOf="@id/contact_profile_pic"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/delete"
 
     >
         <TextView
@@ -44,5 +45,18 @@
             android:paddingVertical="8dp"
             />
 
+
+
+
+
     </LinearLayout>
+    <ImageButton
+        app:layout_constraintStart_toEndOf="@id/profile_info"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:src="@drawable/ic_baseline_delete_24"
+        android:id="@+id/delete"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
 </androidx.constraintlayout.widget.ConstraintLayout>

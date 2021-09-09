@@ -56,7 +56,6 @@ public class MainActivity extends AppCompatActivity {
         database.queryData("CREATE TABLE IF NOT EXISTS Contacts(Id INTEGER PRIMARY KEY AUTOINCREMENT, Name String, Number String)");
         // Kiem tra quyen truy cap danh ba
         checkPermission();
-
     }
 
     @Override
@@ -119,7 +118,7 @@ public class MainActivity extends AppCompatActivity {
     {
         arrayList.clear();
         readContactListFromPhone();
-        if (!isDatabaseEmpty(database)) {                       // Check db trong k
+        if (!isEmptyDatabase(database)) {                       // Check db trong k
                     database.queryData("DELETE FROM Contacts");     // Co du lieu thi xoa het
         }
 
@@ -165,7 +164,7 @@ public class MainActivity extends AppCompatActivity {
     public void importCSV(){
         try {
             arrayList.clear();
-            if (!isDatabaseEmpty(database)) {                       // Check db trong k
+            if (!isEmptyDatabase(database)) {                       // Check db trong k
                 database.queryData("DELETE FROM Contacts");     // Co du lieu thi xoa het
             }
 
@@ -179,7 +178,7 @@ public class MainActivity extends AppCompatActivity {
                 addContact(contactModel);
             }
         } catch (IOException e) {
-
+            Log.e("CSV Import Ex", e.toString());
         }
 
         arrayList = getContactList();
@@ -187,28 +186,14 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setAdapter(adapter);
     }
 
-    public boolean isDatabaseEmpty(Database db) {
+    public boolean isEmptyDatabase(Database db) {
         Cursor contactList = database.getData("SELECT COUNT(*) FROM Contacts");
         contactList.moveToFirst();
         int icount = contactList.getInt(0);
         Log.e("Table count", String.valueOf(icount));
-        if(icount>0)
+        if(icount > 0)
             return false;
         return  true;
-    }
-
-    private  void checkPermission(){
-        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.READ_CONTACTS)
-            != PackageManager.PERMISSION_GRANTED)
-            // Yeu cau quyen truy cap danh ba neu khong co quyen
-            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.READ_CONTACTS}, 100);
-            else {
-                readContactListFromPhone();   // cho nay la lay data tu danh ba trong may phong cho truong hop chay app lan dau
-                arrayList = getContactList();
-                adapter = new MainAdapter(MainActivity.this,this, arrayList);
-                recyclerView.setAdapter(adapter);
-            }
-
     }
 
     private void readContactListFromPhone() {
@@ -314,15 +299,18 @@ public class MainActivity extends AppCompatActivity {
         database.queryData("DELETE FROM Contacts WHERE Id = " + id);
     }
 
-    public void refresh(){
-        adapter = new MainAdapter(MainActivity.this,this, arrayList);
-        recyclerView.setAdapter(adapter);
-    }
+    private  void checkPermission(){
+        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.READ_CONTACTS)
+                != PackageManager.PERMISSION_GRANTED)
+            // Yeu cau quyen truy cap danh ba neu khong co quyen
+            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.READ_CONTACTS}, 100);
+        else {
+            readContactListFromPhone();   // cho nay la lay data tu danh ba trong may phong cho truong hop chay app lan dau
+            arrayList = getContactList();
+            adapter = new MainAdapter(MainActivity.this,this, arrayList);
+            recyclerView.setAdapter(adapter);
+        }
 
-    public void DialogDeleteContact(){
-        AlertDialog.Builder dialogDelete = new AlertDialog.Builder(this);
-        dialogDelete.setMessage("Ban co muon xoa contact khong");
-        dialogDelete.show();
     }
 
     @Override
@@ -337,7 +325,5 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(MainActivity.this, "Permission Dennied.", Toast.LENGTH_SHORT).show();
             checkPermission();
         }
-
-
     }
 }

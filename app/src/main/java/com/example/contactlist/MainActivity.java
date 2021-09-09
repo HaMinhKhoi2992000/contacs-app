@@ -75,42 +75,23 @@ public class MainActivity extends AppCompatActivity {
     public ArrayList<ContactModel> merge()
     {
         ArrayList<ContactModel> duplicateContacts = findDuplicateContactByPhoneNumber();
-        System.out.println(duplicateContacts);
-        ArrayList<String> duplicatePhoneNumbers = findDuplicatePhoneNumbers(duplicateContacts);
-        System.out.println("Numbers");
-        System.out.println(duplicatePhoneNumbers);
-        // Remove duplicate Phone Numbers from arrayList
-        for (int i = 0; i < this.arrayList.size(); i++) {
-            if (duplicatePhoneNumbers.contains(this.arrayList.get(i).getNumber())) {
 
-                deleteContact(this.arrayList.get(i).getId());
-                this.arrayList.remove(i);
-                i--;
-            }
-        }
-
-//        System.out.println(getContactListFromDb());
-
-        // Add back the duplicate number with sole contact
-        for (int i = 0; i < duplicatePhoneNumbers.size(); i++) {
-            for (ContactModel contactModel : duplicateContacts) {
-                String number = duplicatePhoneNumbers.get(i);
-                if (contactModel.getNumber().equals(number)) {
-                    addContact(contactModel);
-                    duplicatePhoneNumbers.remove(i);
-                    i--;
+        for (ContactModel contactModel : duplicateContacts) {
+            ArrayList<ContactModel> arr = getContactByPhoneNumber(contactModel.getNumber());
+            for (ContactModel c : arr) {
+                if (contactModel.getId() != c.getId()) {
+                    deleteContact(c.getId());
                 }
             }
         }
 
-
-        return getContactListFromDb();
+        return getContactList();
     }
 
     public void readContacts()
     {
         arrayList.clear();
-        arrayList = getContactListFromDb();
+        arrayList = getContactList();
         adapter = new MainAdapter(this, arrayList);
         recyclerView.setAdapter(adapter);
     }
@@ -143,7 +124,7 @@ public class MainActivity extends AppCompatActivity {
                     database.queryData("INSERT INTO Contacts VALUES(null, '" + arrayList.get(i).getName() + "', '" + arrayList.get(i).getNumber() + "')");
 
                 arrayList.clear();
-                arrayList = getContactListFromDb();
+                arrayList = getContactList();
 
                 adapter = new MainAdapter(this, arrayList);
                 recyclerView.setAdapter(adapter);
@@ -230,13 +211,26 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setAdapter(adapter);
     }
 
-    private ArrayList<ContactModel> getContactListFromDb() {
+    private ArrayList<ContactModel> getContactList() {
         ArrayList<ContactModel> contactList =  new ArrayList<>();
         Cursor cursor = database.getData("SELECT * FROM Contacts");
         while (cursor.moveToNext()) {
             int id = cursor.getInt(0);
             String name = cursor.getString(1);
             String phoneNumber = cursor.getString(2);
+
+            contactList.add(new ContactModel(id, name, phoneNumber));
+        }
+
+        return contactList;
+    }
+
+    private ArrayList<ContactModel> getContactByPhoneNumber(String phoneNumber) {
+        ArrayList<ContactModel> contactList = new ArrayList<>();
+        Cursor cursor = database.getData("SELECT * FROM Contacts WHERE Number = " + phoneNumber);
+        while (cursor.moveToNext()) {
+            int id = cursor.getInt(0);
+            String name = cursor.getString(1);
 
             contactList.add(new ContactModel(id, name, phoneNumber));
         }
@@ -256,27 +250,6 @@ public class MainActivity extends AppCompatActivity {
         }
 
         return duplicateContact;
-    }
-
-    private ArrayList<String> findDuplicatePhoneNumbers(ArrayList<ContactModel> contactList) {
-        ArrayList<String> duplicatePhoneNumbers = new ArrayList<>();
-        for (int i = 0; i < contactList.size() - 1; i++) {
-            int counter = 0;
-            ContactModel currentContact = contactList.get(i);
-
-            for (int j = 0; j < contactList.size(); j++) {
-                ContactModel nextContact = contactList.get(j);
-                if (currentContact.getNumber().equals(nextContact.getNumber())) {
-                    counter++;
-                }
-            }
-
-            if (counter > 0) {
-                duplicatePhoneNumbers.add(currentContact.getNumber());
-            }
-        }
-
-        return duplicatePhoneNumbers;
     }
 
     private void addContact(ContactModel contactModel) {

@@ -46,8 +46,7 @@ public class MainActivity extends AppCompatActivity {
         database.queryData("CREATE TABLE IF NOT EXISTS Contacts(Id INTEGER PRIMARY KEY AUTOINCREMENT, Name String, Number String)");
         // Kiem tra quyen truy cap danh ba
         checkPermission();
-        deleteContact(getApplicationContext(), arrayList.get(0).getName(), arrayList.get(0).getNumber());
-        Log.e("deleteContact", String.valueOf(deleteContact(getApplicationContext(), arrayList.get(0).getName(), arrayList.get(0).getNumber())));
+
     }
 
     @Override
@@ -61,7 +60,9 @@ public class MainActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case R.id.merge:
-                merge();
+                this.arrayList = merge();
+                adapter = new MainAdapter(this, arrayList);
+                recyclerView.setAdapter(adapter);
                 return true;
             case R.id.ReadContacts:
                 readContacts();
@@ -71,18 +72,45 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void merge()
+    public ArrayList<ContactModel> merge()
     {
-        arrayList.clear();
-        getContactListFromDb(1);
-        adapter = new MainAdapter(this, arrayList);
-        recyclerView.setAdapter(adapter);
+        ArrayList<ContactModel> duplicateContacts = findDuplicateContactByPhoneNumber();
+        System.out.println(duplicateContacts);
+        ArrayList<String> duplicatePhoneNumbers = findDuplicatePhoneNumbers(duplicateContacts);
+        System.out.println("Numbers");
+        System.out.println(duplicatePhoneNumbers);
+        // Remove duplicate Phone Numbers from arrayList
+        for (int i = 0; i < this.arrayList.size(); i++) {
+            if (duplicatePhoneNumbers.contains(this.arrayList.get(i).getNumber())) {
+
+                deleteContact(this.arrayList.get(i).getId());
+                this.arrayList.remove(i);
+                i--;
+            }
+        }
+
+//        System.out.println(getContactListFromDb());
+
+        // Add back the duplicate number with sole contact
+        for (int i = 0; i < duplicatePhoneNumbers.size(); i++) {
+            for (ContactModel contactModel : duplicateContacts) {
+                String number = duplicatePhoneNumbers.get(i);
+                if (contactModel.getNumber().equals(number)) {
+                    addContact(contactModel);
+                    duplicatePhoneNumbers.remove(i);
+                    i--;
+                }
+            }
+        }
+
+
+        return getContactListFromDb();
     }
 
     public void readContacts()
     {
         arrayList.clear();
-        getContactListFromDb(0);
+        arrayList = getContactListFromDb();
         adapter = new MainAdapter(this, arrayList);
         recyclerView.setAdapter(adapter);
     }
@@ -104,17 +132,18 @@ public class MainActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.READ_CONTACTS}, 100);
             else {
 
-                getContactList();
+                readContactListFromPhone();   // cho nay la lay data tu danh ba trong may
                 Log.e("get contact from phone", "run");
-                if (!isDatabaseEmpty(database)) {
-                    database.queryData("DELETE FROM Contacts");
+                if (!isDatabaseEmpty(database)) {                       // Check db trong k
+                    database.queryData("DELETE FROM Contacts");     // Co du lieu thi xoa het
                 }
 
+                // Nap lai vao db data tu danh ba trong may
                 for (int i = 0; i < arrayList.size(); i++)
                     database.queryData("INSERT INTO Contacts VALUES(null, '" + arrayList.get(i).getName() + "', '" + arrayList.get(i).getNumber() + "')");
 
                 arrayList.clear();
-                getContactListFromDb(0);
+                arrayList = getContactListFromDb();
 
                 adapter = new MainAdapter(this, arrayList);
                 recyclerView.setAdapter(adapter);
@@ -148,51 +177,7 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private void getContactListFromDb(int type) {
-        Cursor contactsList = database.getData("SELECT * FROM Contacts");
-        Log.e("Data from database", contactsList.toString());
-        while (contactsList.moveToNext()) {
-            int id = contactsList.getInt(0);
-            String name = contactsList.getString(1);
-            String phoneNumber = contactsList.getString(2);
-
-            if (type == 0) {
-                arrayList.add(new ContactModel(id, name, phoneNumber));
-            } else if (type == 1) {
-                if (!phoneNumber.equals(lastnumber)) {
-                    lastnumber = phoneNumber;
-                    arrayList.add(new ContactModel(id, name, phoneNumber));
-                }
-            }
-        }
-    }
-
-    public static boolean deleteContact(Context ctx, String phone, String name) {
-        Uri contactUri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phone));
-        Cursor cur = ctx.getContentResolver().query(contactUri, null, null, null, null);
-        try {
-            if (cur.moveToFirst()) {
-                do {
-                    if (cur.getString(cur.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME)).equalsIgnoreCase(name)) {
-                        String lookupKey = cur.getString(cur.getColumnIndex(ContactsContract.Contacts.LOOKUP_KEY));
-                        Uri uri = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_LOOKUP_URI, lookupKey);
-                        ctx.getContentResolver().delete(uri, null, null);
-                        return true;
-                    }
-
-                } while (cur.moveToNext());
-            }
-
-        } catch (Exception e) {
-            System.out.println(e.getStackTrace());
-        } finally {
-            cur.close();
-        }
-        return false;
-    }
-
-
-    private void getContactList() {
+    private void readContactListFromPhone() {
         Uri uri = ContactsContract.Contacts.CONTENT_URI;
 
         // sort tăng dần theo tên A-Z
@@ -214,8 +199,6 @@ public class MainActivity extends AppCompatActivity {
                         ContactsContract.Contacts.DISPLAY_NAME
                 ));
 
-
-
                 // Tạo phone uri
                 Uri uriPhone = ContactsContract.CommonDataKinds.Phone.CONTENT_URI;
                 // Tao selection uri
@@ -229,10 +212,6 @@ public class MainActivity extends AppCompatActivity {
                     String number = phoneCursor.getString(phoneCursor.getColumnIndex(
                             ContactsContract.CommonDataKinds.Phone.NUMBER
                     ));
-
-                    //Log.e("lastnumber ", lastnumber);
-                   // Log.e("number", number);
-
 
                     ContactModel model = new ContactModel();
                     model.setName(name);
@@ -251,13 +230,70 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setAdapter(adapter);
     }
 
+    private ArrayList<ContactModel> getContactListFromDb() {
+        ArrayList<ContactModel> contactList =  new ArrayList<>();
+        Cursor cursor = database.getData("SELECT * FROM Contacts");
+        while (cursor.moveToNext()) {
+            int id = cursor.getInt(0);
+            String name = cursor.getString(1);
+            String phoneNumber = cursor.getString(2);
+
+            contactList.add(new ContactModel(id, name, phoneNumber));
+        }
+
+        return contactList;
+    }
+
+    private ArrayList<ContactModel> findDuplicateContactByPhoneNumber() {
+        ArrayList<ContactModel> duplicateContact = new ArrayList<>();
+        Cursor cursor = database.getData("SELECT Id, Name, Number, COUNT(Number) FROM Contacts GROUP BY Number HAVING COUNT(Number) > 1");
+        while (cursor.moveToNext()) {
+            int id = cursor.getInt(0);
+            String name = cursor.getString(1);
+            String phoneNumber = cursor.getString(2);
+
+            duplicateContact.add(new ContactModel(id, name, phoneNumber));
+        }
+
+        return duplicateContact;
+    }
+
+    private ArrayList<String> findDuplicatePhoneNumbers(ArrayList<ContactModel> contactList) {
+        ArrayList<String> duplicatePhoneNumbers = new ArrayList<>();
+        for (int i = 0; i < contactList.size() - 1; i++) {
+            int counter = 0;
+            ContactModel currentContact = contactList.get(i);
+
+            for (int j = 0; j < contactList.size(); j++) {
+                ContactModel nextContact = contactList.get(j);
+                if (currentContact.getNumber().equals(nextContact.getNumber())) {
+                    counter++;
+                }
+            }
+
+            if (counter > 0) {
+                duplicatePhoneNumbers.add(currentContact.getNumber());
+            }
+        }
+
+        return duplicatePhoneNumbers;
+    }
+
+    private void addContact(ContactModel contactModel) {
+        database.queryData("INSERT INTO Contacts VALUES(null, '" + contactModel.getName() + "', '" + contactModel.getName() + "')");
+    }
+
+    private void deleteContact(int id) {
+        database.queryData("DELETE FROM Contacts WHERE Id = " + id);
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == 100 && grantResults.length > 0 && grantResults[0]
             == PackageManager.PERMISSION_GRANTED){
             // khi duoc cap quyen lap tuc get contact list
-            getContactList();
+            readContactListFromPhone();
         } else {
             // khi bi tu choi quyen truy cap danh ba
             Toast.makeText(MainActivity.this, "Permission Dennied.", Toast.LENGTH_SHORT).show();
